@@ -1,0 +1,45 @@
+name: Test Mintbook
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-test-only
+          MYSQL_DATABASE: mintbook
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-for-deployment
+      DJANGO_DEBUG: "true"
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ci-test-only
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_DATABASE: mintbook
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
+      - run: pip install -r backend/requirements.lock
+      - run: python backend/manage.py makemigrations --check --dry-run
+      - run: python backend/manage.py test ledger --noinput
+      - run: npm ci --prefix frontend
+      - run: npm test --prefix frontend
+      - run: npm run build --prefix frontend
